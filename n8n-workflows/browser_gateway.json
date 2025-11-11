@@ -1,0 +1,36 @@
+{
+"name": "Browser Gateway Relay",
+"nodes": [
+ {
+   "parameters": { "path": "browser/start" },
+   "id": "Webhook4",
+   "name": "Webhook",
+   "type": "n8n-nodes-base.webhook",
+   "typeVersion": 1
+ },
+ {
+   "parameters": {
+     "url": "http://browser-gateway:8000/start",
+     "method": "POST",
+     "bodyParametersUi": {
+       "parameter": [ { "name": "url", "value": "={{$json[\"url\"] || 'https://google.com'}}" } ]
+     }
+   },
+   "id": "BrowserStart",
+   "name": "Start Browser",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 1
+ },
+ {
+   "parameters": { "responseMode": "lastNode" },
+   "id": "Respond4",
+   "name": "Respond",
+   "type": "n8n-nodes-base.respondToWebhook",
+   "typeVersion": 1
+ }
+],
+"connections": {
+ "Webhook4": { "main": [ [ { "node": "Start Browser", "type": "main", "index": 0 } ] ] },
+ "Start Browser": { "main": [ [ { "node": "Respond", "type": "main", "index": 0 } ] ] }
+}
+}

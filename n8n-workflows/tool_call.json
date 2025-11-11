@@ -1,0 +1,38 @@
+{
+"name": "Tool Call Relay",
+"nodes": [
+ {
+   "parameters": { "path": "tool-call" },
+   "id": "Webhook3",
+   "name": "Webhook",
+   "type": "n8n-nodes-base.webhook",
+   "typeVersion": 1
+ },
+ {
+   "parameters": {
+     "url": "https://your-mcp/executor",
+     "method": "POST",
+     "bodyParametersUi": {
+       "parameter": [
+         { "name": "command", "value": "={{$json[\"command\"]}}" }
+       ]
+     }
+   },
+   "id": "Executor",
+   "name": "MCP Executor",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 1
+ },
+ {
+   "parameters": { "responseMode": "lastNode" },
+   "id": "Respond3",
+   "name": "Respond",
+   "type": "n8n-nodes-base.respondToWebhook",
+   "typeVersion": 1
+ }
+],
+"connections": {
+ "Webhook3": { "main": [ [ { "node": "MCP Executor", "type": "main", "index": 0 } ] ] },
+ "MCP Executor": { "main": [ [ { "node": "Respond", "type": "main", "index": 0 } ] ] }
+}
+}

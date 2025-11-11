@@ -1,0 +1,59 @@
+{
+"name": "Voice Chat Relay",
+"nodes": [
+ {
+   "parameters": { "path": "voice-chat", "options": {} },
+   "id": "Webhook2",
+   "name": "Webhook",
+   "type": "n8n-nodes-base.webhook",
+   "typeVersion": 1
+ },
+ {
+   "parameters": {
+     "url": "https://runpod.io/your-whisper/stt",
+     "method": "POST",
+     "bodyParametersUi": {
+       "parameter": [
+         { "name": "audio", "value": "={{$binary.data}}" }
+       ]
+     }
+   },
+   "id": "STT",
+   "name": "STT Service",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 1
+ },
+ {
+   "parameters": {
+     "url": "https://YOUR-PROJECT.supabase.co/rest/v1/conversations",
+     "method": "POST",
+     "bodyParametersUi": {
+       "parameter": [
+         { "name": "message", "value": "={{$json[\"text\"]}}" }
+       ]
+     },
+     "headersUi": {
+       "parameter": [
+         { "name": "apikey", "value": "SUPABASE_API_KEY" }
+       ]
+     }
+   },
+   "id": "Supabase2",
+   "name": "Log STT result",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 1
+ },
+ {
+   "parameters": { "responseMode": "lastNode" },
+   "id": "Respond2",
+   "name": "Respond",
+   "type": "n8n-nodes-base.respondToWebhook",
+   "typeVersion": 1
+ }
+],
+"connections": {
+ "Webhook2": { "main": [ [ { "node": "STT Service", "type": "main", "index": 0 } ] ] },
+ "STT Service": { "main": [ [ { "node": "Log STT result", "type": "main", "index": 0 } ] ] },
+ "Log STT result": { "main": [ [ { "node": "Respond", "type": "main", "index": 0 } ] ] }
+}
+}

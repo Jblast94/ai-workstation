@@ -1,0 +1,64 @@
+{
+"name": "Chat Relay",
+"nodes": [
+ {
+   "parameters": { "path": "chat" },
+   "id": "Webhook",
+   "name": "Webhook",
+   "type": "n8n-nodes-base.webhook",
+   "typeVersion": 1
+ },
+ {
+   "parameters": {
+     "url": "https://YOUR-PROJECT.supabase.co/rest/v1/conversations",
+     "method": "POST",
+     "bodyParametersUi": {
+       "parameter": [
+         { "name": "message", "value": "={{$json[\"message\"]}}" }
+       ]
+     },
+     "headersUi": {
+       "parameter": [
+         { "name": "apikey", "value": "SUPABASE_API_KEY" }
+       ]
+     }
+   },
+   "id": "Supabase",
+   "name": "Log to Supabase",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 1
+ },
+ {
+   "parameters": {
+     "url": "https://openrouter.ai/api/v1/chat/completions",
+     "method": "POST",
+     "bodyParametersUi": {
+       "parameter": [
+         { "name": "prompt", "value": "={{$json[\"message\"]}}" }
+       ]
+     },
+     "headersUi": {
+       "parameter": [
+         { "name": "Authorization", "value": "Bearer LLM_API_KEY" }
+       ]
+     }
+   },
+   "id": "LLM",
+   "name": "LLM API Call",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 1
+ },
+ {
+   "parameters": { "responseMode": "lastNode" },
+   "id": "Respond",
+   "name": "Respond",
+   "type": "n8n-nodes-base.respondToWebhook",
+   "typeVersion": 1
+ }
+],
+"connections": {
+ "Webhook": { "main": [ [ { "node": "Log to Supabase", "type": "main", "index": 0 } ] ] },
+ "Log to Supabase": { "main": [ [ { "node": "LLM API Call", "type": "main", "index": 0 } ] ] },
+ "LLM API Call": { "main": [ [ { "node": "Respond", "type": "main", "index": 0 } ] ] }
+}
+}

@@ -1,0 +1,26 @@
+version: "3"
+services:
+ui:
+ build: ./ui
+ ports:
+   - "7860:7860"
+ environment:
+   - N8N_API_BASE=http://n8n:5678/webhook
+ depends_on:
+   - n8n
+n8n:
+ image: n8nio/n8n
+ ports:
+   - "5678:5678"
+ environment:
+   - GENERIC_TIMEZONE=UTC
+   - N8N_BASIC_AUTH_ACTIVE=true
+   - N8N_BASIC_AUTH_USER=admin
+   - N8N_BASIC_AUTH_PASSWORD=strongpassword
+   - DB_SQLITE_VACUUM_ON_STARTUP=true
+browser-gateway:
+ build: ./browser-gateway
+ ports:
+   - "8000:8000"
+   - "5900:5900"
+ privileged: true
