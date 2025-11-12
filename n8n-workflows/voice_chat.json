@@ -1,59 +1,200 @@
 {
-"name": "Voice Chat Relay",
-"nodes": [
- {
-   "parameters": { "path": "voice-chat", "options": {} },
-   "id": "Webhook2",
-   "name": "Webhook",
-   "type": "n8n-nodes-base.webhook",
-   "typeVersion": 1
- },
- {
-   "parameters": {
-     "url": "https://runpod.io/your-whisper/stt",
-     "method": "POST",
-     "bodyParametersUi": {
-       "parameter": [
-         { "name": "audio", "value": "={{$binary.data}}" }
-       ]
-     }
-   },
-   "id": "STT",
-   "name": "STT Service",
-   "type": "n8n-nodes-base.httpRequest",
-   "typeVersion": 1
- },
- {
-   "parameters": {
-     "url": "https://YOUR-PROJECT.supabase.co/rest/v1/conversations",
-     "method": "POST",
-     "bodyParametersUi": {
-       "parameter": [
-         { "name": "message", "value": "={{$json[\"text\"]}}" }
-       ]
-     },
-     "headersUi": {
-       "parameter": [
-         { "name": "apikey", "value": "SUPABASE_API_KEY" }
-       ]
-     }
-   },
-   "id": "Supabase2",
-   "name": "Log STT result",
-   "type": "n8n-nodes-base.httpRequest",
-   "typeVersion": 1
- },
- {
-   "parameters": { "responseMode": "lastNode" },
-   "id": "Respond2",
-   "name": "Respond",
-   "type": "n8n-nodes-base.respondToWebhook",
-   "typeVersion": 1
- }
-],
-"connections": {
- "Webhook2": { "main": [ [ { "node": "STT Service", "type": "main", "index": 0 } ] ] },
- "STT Service": { "main": [ [ { "node": "Log STT result", "type": "main", "index": 0 } ] ] },
- "Log STT result": { "main": [ [ { "node": "Respond", "type": "main", "index": 0 } ] ] }
-}
+  "name": "Voice-Agent Orchestrator (Spec Example - import into n8n and adapt secrets)",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "voice-agent",
+        "options": {}
+      },
+      "id": "Webhook_VoiceAgent",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "authentication": "none",
+        "options": {},
+        "url": "={{$json[\"audio\"] ? $env[\"RUNPOD_STT_ENDPOINT_URL\"] : ''}}",
+        "method": "POST",
+        "bodyParametersUi": {
+          "parameter": []
+        },
+        "headersUi": {
+          "parameter": []
+        }
+      },
+      "id": "STT",
+      "name": "STT (RunPod)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "functionCode": "// Derive user_text from text or STT result; validate secret\nconst incomingSecret = $json[\"secret\"];\nif (incomingSecret !== $env[\"ORCHESTRATOR_WEBHOOK_SECRET\"]) {\n  return [{ json: { error: \"unauthorized\" }, pairedItem: { item: 0 }, $continue: false }];\n}\n\nconst hasAudio = !!$json[\"audio\"];\nlet transcript_text = \"\";\nif (hasAudio && $items(\"STT\")[0]) {\n  transcript_text = $items(\"STT\")[0].json.transcript || \"\";\n}\nconst text = $json[\"text\"] || transcript_text;\nif (!text) {\n  return [{ json: { error: \"no_input\" } }];\n}\n\nreturn [{\n  json: {\n    conversation_id: $json[\"conversation_id\"] || null,\n    user_text: text,\n    transcript_text,\n  }\n}];"
+      },
+      "id": "DeriveUserText",
+      "name": "Derive User Text & Validate Secret",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "url": "={{$env[\"SUPABASE_URL_VOICE_AGENT\"]}}/rest/v1/rpc/get_or_create_conversation",
+        "method": "POST",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headers": {
+          "X-Client-Info": "voice-agent-n8n",
+          "apikey": "={{$env[\"SUPABASE_SERVICE_ROLE_KEY_VOICE_AGENT\"]}}",
+          "Content-Type": "application/json"
+        },
+        "sendBody": true,
+        "bodyParametersJson": "={{ { conversation_id: $json[\"conversation_id\"] } }}"
+      },
+      "id": "Conversation",
+      "name": "Get/Create Conversation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "method": "POST",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headers": {
+          "Authorization": "={{\"Bearer \" + $env[\"OPENROUTER_API_KEY\"]}}",
+          "Content-Type": "application/json"
+        },
+        "sendBody": true,
+        "bodyParametersJson": "={{ { model: \"cognitivecomputations/dolphin-mistral-24b-venice-edition:free\", messages: [ { role: \"user\", content: $json[\"user_text\"] } ] } }}"
+      },
+      "id": "LLM",
+      "name": "OpenRouter Chat",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "url": "={{$env[\"RUNPOD_TTS_ENDPOINT_URL\"]}}",
+        "method": "POST",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headers": {
+          "Authorization": "={{\"Bearer \" + $env[\"RUNPOD_API_KEY\"]}}",
+          "Content-Type": "application/json"
+        },
+        "sendBody": true,
+        "bodyParametersJson": "={{ { voice: \"Katie\", text: $json[\"assistant_response_text\"] || $items(\"LLM\")[0].json.choices[0].message.content } }}"
+      },
+      "id": "TTS",
+      "name": "RunPod TTS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "functionCode": "// Shape final response according to contract\nconst convoId = $items(\"Conversation\")[0]?.json?.conversation_id || $json[\"conversation_id\"] || null;\nconst transcript_text = $items(\"DeriveUserText\")[0]?.json?.transcript_text || \"\";\nconst assistant = $items(\"LLM\")[0]?.json?.choices?.[0]?.message?.content || \"\";\nconst tts = $items(\"TTS\")[0]?.json?.tts_audio_url || $items(\"TTS\")[0]?.json?.audio || null;\n\nreturn [{\n  json: {\n    conversation_id: convoId,\n    transcript_text,\n    assistant_response_text: assistant,\n    tts_audio_url: tts\n  }\n}];"
+      },
+      "id": "ShapeResponse",
+      "name": "Shape Response",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "Respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1
+    }
+  ],
+  "connections": {
+    "Webhook_VoiceAgent": {
+      "main": [
+        [
+          {
+            "node": "STT",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "DeriveUserText",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "STT": {
+      "main": [
+        [
+          {
+            "node": "DeriveUserText",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeriveUserText": {
+      "main": [
+        [
+          {
+            "node": "Conversation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conversation": {
+      "main": [
+        [
+          {
+            "node": "LLM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM": {
+      "main": [
+        [
+          {
+            "node": "TTS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TTS": {
+      "main": [
+        [
+          {
+            "node": "ShapeResponse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ShapeResponse": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
 }
